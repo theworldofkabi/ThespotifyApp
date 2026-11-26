@@ -75,11 +75,10 @@
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
     let videoCompleted = false;
-    let launchScheduled = false;
-    let launchTimer = null;
     let autoAttempted = false;
     let tapLaunched = false;
     let leftForSpotify = false;
+    let dialogShownOnAuto = false;
     let fullscreenBlocked = false;
 
     function updateVideoFit() {
@@ -97,12 +96,7 @@
     async function launchSpotify(fromUserTap) {
       if (leftForSpotify) return;
       if (!fromUserTap && autoAttempted) return;
-      if (fromUserTap && tapLaunched) return;
-
-      if (launchTimer !== null) {
-        clearTimeout(launchTimer);
-        launchTimer = null;
-      }
+      if (fromUserTap && (tapLaunched || dialogShownOnAuto)) return;
 
       if (fromUserTap) {
         tapLaunched = true;
@@ -191,6 +185,12 @@
       }
     }
 
+    window.addEventListener("blur", () => {
+      if (autoAttempted && !tapLaunched) {
+        dialogShownOnAuto = true;
+      }
+    });
+
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden" && (autoAttempted || tapLaunched)) {
         leftForSpotify = true;
@@ -218,12 +218,7 @@
 
     video.addEventListener("ended", () => {
       videoCompleted = true;
-      if (launchScheduled || autoAttempted || leftForSpotify) return;
-      launchScheduled = true;
-      launchTimer = setTimeout(() => {
-        launchTimer = null;
-        launchSpotify(false);
-      }, 2000);
+      launchSpotify(false);
     });
 
     video.addEventListener("loadedmetadata", updateVideoFit);
