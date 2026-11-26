@@ -107,13 +107,30 @@
     async function launchSpotify() {
       if (launched) return;
       launched = true;
-      try {
-        const res = await fetch("/open-spotify", { method: "POST" });
-        if (res.ok) return;
-      } catch {
-        // Static hosts (such as GitHub Pages) fall back to the spotify: URI scheme.
+
+      const isLocal =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+
+      if (isLocal) {
+        try {
+          const res = await fetch("/open-spotify", { method: "POST" });
+          if (res.ok) return;
+        } catch {
+          // Fall back to spotify: URI if the local helper endpoint is unavailable.
+        }
       }
+
       window.location.href = "spotify:";
+
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isMobile) {
+        setTimeout(() => {
+          if (document.visibilityState === "visible") {
+            window.location.href = "https://open.spotify.com/";
+          }
+        }, 1500);
+      }
     }
 
     async function enterFullscreen() {
