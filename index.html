@@ -64,8 +64,10 @@
 
   <script>
     const video = document.getElementById("video");
-    const ANDROID_SPOTIFY_INTENT =
+    const ANDROID_SPOTIFY_INTENT_WITH_FALLBACK =
       "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;S.browser_fallback_url=https%3A%2F%2Fopen.spotify.com%2F;end";
+    const ANDROID_SPOTIFY_INTENT_DIRECT =
+      "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;end";
     const isAndroid = /Android/i.test(navigator.userAgent);
     const isIOS =
       /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -73,6 +75,8 @@
 
     let launched = false;
     let fullscreenBlocked = false;
+    let userTappedDuringPlayback = false;
+    let preparedAndroidIntent = "";
 
     function updateVideoFit() {
       if (!video.videoWidth || !video.videoHeight || !window.innerHeight) return;
@@ -104,10 +108,18 @@
       }
 
       if (isAndroid) {
+        // Storing userTappedDuringPlayback in JS does NOT preserve Chromium's transient userActivation (~5s timeout).
+        const hasActiveGesture = Boolean(
+          navigator.userActivation && navigator.userActivation.isActive
+        );
+        const targetIntent =
+          userTappedDuringPlayback && hasActiveGesture && preparedAndroidIntent
+            ? preparedAndroidIntent
+            : ANDROID_SPOTIFY_INTENT_DIRECT;
         try {
-          window.location.href = ANDROID_SPOTIFY_INTENT;
+          window.location.href = targetIntent;
         } catch {
-          // Gracefully ignore if Android/browser security blocks ungestured intent navigation.
+          // Gracefully ignore if Android/browser security blocks external intent navigation.
         }
         return;
       }
@@ -161,9 +173,22 @@
       }
     }
 
+    function registerPlaybackTap() {
+      if (video.ended || userTappedDuringPlayback) return;
+      userTappedDuringPlayback = true;
+      if (isAndroid) {
+        preparedAndroidIntent = ANDROID_SPOTIFY_INTENT_WITH_FALLBACK;
+      }
+    }
+
     document.addEventListener("click", async () => {
-      enterFullscreen();
-      video.muted = false;
+      registerPlaybackTap();
+      if (!isAndroid) {
+        enterFullscreen();
+      }
+      if (video.muted) {
+        video.muted = false;
+      }
       if (video.paused && !video.ended) {
         try {
           await video.play();
