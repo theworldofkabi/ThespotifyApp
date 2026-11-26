@@ -28,6 +28,7 @@
       background: #000;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
 
     video {
@@ -49,6 +50,28 @@
         object-fit: contain;
       }
     }
+
+    .continue-hint {
+      position: fixed;
+      left: 50%;
+      bottom: max(clamp(28px, 6vmin, 48px), env(safe-area-inset-bottom));
+      transform: translateX(-50%) translateY(6px);
+      z-index: 20;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: clamp(13px, 3.2vmin, 15px);
+      font-weight: 400;
+      letter-spacing: 0.03em;
+      color: rgba(255, 255, 255, 0.72);
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.45s ease, transform 0.45s ease;
+    }
+
+    .continue-hint.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   </style>
 </head>
 <body>
@@ -61,22 +84,21 @@
     webkit-playsinline
     preload="auto"
   ></video>
+  <p id="continueHint" class="continue-hint" aria-live="polite">Tap anywhere to continue</p>
 
   <script>
     const video = document.getElementById("video");
-    const ANDROID_SPOTIFY_INTENT_WITH_FALLBACK =
+    const continueHint = document.getElementById("continueHint");
+    const ANDROID_SPOTIFY_INTENT =
       "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;S.browser_fallback_url=https%3A%2F%2Fopen.spotify.com%2F;end";
-    const ANDROID_SPOTIFY_INTENT_DIRECT =
-      "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;end";
     const isAndroid = /Android/i.test(navigator.userAgent);
     const isIOS =
       /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
+    let videoCompleted = false;
     let launched = false;
     let fullscreenBlocked = false;
-    let userTappedDuringPlayback = false;
-    let preparedAndroidIntent = "";
 
     function updateVideoFit() {
       if (!video.videoWidth || !video.videoHeight || !window.innerHeight) return;
@@ -93,6 +115,7 @@
     async function launchSpotify() {
       if (launched) return;
       launched = true;
+      continueHint.classList.remove("visible");
 
       const isLocal =
         window.location.hostname === "localhost" ||
@@ -108,16 +131,8 @@
       }
 
       if (isAndroid) {
-        // Storing userTappedDuringPlayback in JS does NOT preserve Chromium's transient userActivation (~5s timeout).
-        const hasActiveGesture = Boolean(
-          navigator.userActivation && navigator.userActivation.isActive
-        );
-        const targetIntent =
-          userTappedDuringPlayback && hasActiveGesture && preparedAndroidIntent
-            ? preparedAndroidIntent
-            : ANDROID_SPOTIFY_INTENT_DIRECT;
         try {
-          window.location.href = targetIntent;
+          window.location.href = ANDROID_SPOTIFY_INTENT;
         } catch {
           // Gracefully ignore if Android/browser security blocks external intent navigation.
         }
@@ -131,7 +146,7 @@
             if (document.visibilityState === "visible") {
               window.location.replace("https://open.spotify.com/");
             }
-          }, 1200);
+          }, 1500);
         } catch {
           // Gracefully ignore if browser security blocks external navigation.
         }
@@ -173,16 +188,12 @@
       }
     }
 
-    function registerPlaybackTap() {
-      if (video.ended || userTappedDuringPlayback) return;
-      userTappedDuringPlayback = true;
-      if (isAndroid) {
-        preparedAndroidIntent = ANDROID_SPOTIFY_INTENT_WITH_FALLBACK;
-      }
-    }
-
     document.addEventListener("click", async () => {
-      registerPlaybackTap();
+      if (videoCompleted) {
+        launchSpotify();
+        return;
+      }
+
       if (!isAndroid) {
         enterFullscreen();
       }
@@ -196,10 +207,15 @@
       }
     });
 
+    video.addEventListener("ended", () => {
+      videoCompleted = true;
+      continueHint.classList.add("visible");
+      document.body.style.cursor = "pointer";
+    });
+
     video.addEventListener("loadedmetadata", updateVideoFit);
     window.addEventListener("resize", updateVideoFit);
     window.addEventListener("orientationchange", updateVideoFit);
-    video.addEventListener("ended", launchSpotify);
     window.addEventListener("DOMContentLoaded", startPlayback);
   </script>
 </body>
