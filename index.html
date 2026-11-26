@@ -74,10 +74,12 @@
 
     let videoCompleted = false;
     let launched = false;
+    let leftForSpotify = false;
+    let iosFallbackTimer = null;
     let fullscreenBlocked = false;
 
     function updateVideoFit() {
-      if (!video.videoWidth || !video.videoHeight || !window.innerHeight) return;
+      if (leftForSpotify || !video.videoWidth || !video.videoHeight || !window.innerHeight) return;
       const videoAspect = video.videoWidth / video.videoHeight;
       const viewportAspect = window.innerWidth / window.innerHeight;
       const aspectRatioDiff = Math.max(
@@ -117,8 +119,9 @@
       if (isIOS) {
         try {
           window.location.href = "spotify://";
-          setTimeout(() => {
-            if (document.visibilityState === "visible") {
+          iosFallbackTimer = setTimeout(() => {
+            iosFallbackTimer = null;
+            if (!leftForSpotify && document.visibilityState === "visible") {
               window.location.replace("https://open.spotify.com/");
             }
           }, 1500);
@@ -163,7 +166,30 @@
       }
     }
 
+    function handlePageBackgrounded() {
+      if (iosFallbackTimer !== null) {
+        clearTimeout(iosFallbackTimer);
+        iosFallbackTimer = null;
+      }
+      if (!video.paused) {
+        video.pause();
+      }
+      video.muted = true;
+      if (launched) {
+        leftForSpotify = true;
+      }
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        handlePageBackgrounded();
+      }
+    });
+
+    window.addEventListener("pagehide", handlePageBackgrounded);
+
     document.addEventListener("click", async () => {
+      if (leftForSpotify) return;
       if (videoCompleted) {
         launchSpotify();
         return;
