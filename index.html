@@ -122,19 +122,20 @@
         }
       }
 
+      const isMobile =
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+      if (isMobile) {
+        // Use HTTPS App/Universal Link on mobile to avoid repeated spotify: custom-scheme permission prompts.
+        window.location.replace("https://open.spotify.com/");
+        return;
+      }
+
       try {
         window.location.href = "spotify:";
       } catch {
         // Ignore if external protocol navigation is blocked.
-      }
-
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      if (isMobile) {
-        setTimeout(() => {
-          if (document.visibilityState === "visible") {
-            window.location.href = "https://open.spotify.com/";
-          }
-        }, 1500);
       }
     }
 
