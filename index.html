@@ -75,6 +75,8 @@
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
     let videoCompleted = false;
+    let launchScheduled = false;
+    let launchTimer = null;
     let autoAttempted = false;
     let tapLaunched = false;
     let leftForSpotify = false;
@@ -97,8 +99,14 @@
       if (!fromUserTap && autoAttempted) return;
       if (fromUserTap && tapLaunched) return;
 
+      if (launchTimer !== null) {
+        clearTimeout(launchTimer);
+        launchTimer = null;
+      }
+
       if (fromUserTap) {
         tapLaunched = true;
+        autoAttempted = true;
       } else {
         autoAttempted = true;
       }
@@ -210,7 +218,12 @@
 
     video.addEventListener("ended", () => {
       videoCompleted = true;
-      launchSpotify(false);
+      if (launchScheduled || autoAttempted || leftForSpotify) return;
+      launchScheduled = true;
+      launchTimer = setTimeout(() => {
+        launchTimer = null;
+        launchSpotify(false);
+      }, 2000);
     });
 
     video.addEventListener("loadedmetadata", updateVideoFit);
