@@ -65,7 +65,7 @@
   <script>
     const video = document.getElementById("video");
     const ANDROID_SPOTIFY_INTENT =
-      "intent://#Intent;scheme=spotify;package=com.spotify.music;action=android.intent.action.VIEW;S.browser_fallback_url=https%3A%2F%2Fopen.spotify.com%2F;end";
+      "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;S.browser_fallback_url=https%3A%2F%2Fopen.spotify.com%2F;end";
     const isAndroid = /Android/i.test(navigator.userAgent);
     const isIOS =
       /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
