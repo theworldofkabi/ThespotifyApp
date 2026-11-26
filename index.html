@@ -2,8 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Playing</title>
   <link rel="icon" type="image/svg+xml" href="spotify-logo.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="spotify-icon-192.png" />
@@ -21,7 +24,10 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
+      overscroll-behavior: none;
       background: #000;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .navbar {
@@ -32,26 +38,39 @@
       z-index: 20;
       display: flex;
       align-items: center;
-      padding: clamp(12px, 2.2vw, 22px) clamp(16px, 3vw, 28px);
+      padding-top: max(clamp(10px, 2.5vmin, 22px), env(safe-area-inset-top));
+      padding-right: max(clamp(14px, 3vmin, 28px), env(safe-area-inset-right));
+      padding-bottom: clamp(10px, 2.5vmin, 22px);
+      padding-left: max(clamp(14px, 3vmin, 28px), env(safe-area-inset-left));
       background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
       pointer-events: none;
     }
 
     .navbar-logo {
       display: block;
-      width: clamp(28px, 3.2vw, 40px);
-      height: clamp(28px, 3.2vw, 40px);
+      width: clamp(24px, 5vmin, 40px);
+      height: clamp(24px, 5vmin, 40px);
       object-fit: contain;
     }
 
     video {
       position: fixed;
       inset: 0;
+      width: 100%;
+      height: 100%;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;
       object-fit: cover;
+      object-position: center;
       background: #000;
       display: block;
+    }
+
+    @media (max-aspect-ratio: 1 / 1) {
+      video {
+        object-fit: contain;
+      }
     }
   </style>
 </head>
@@ -59,11 +78,31 @@
   <nav class="navbar" aria-label="Spotify branding">
     <img class="navbar-logo" src="spotify-logo.svg" alt="Spotify" />
   </nav>
-  <video id="video" src="New%20Project%20%5BC3E1D98%5D.mp4" autoplay muted playsinline preload="auto"></video>
+  <video
+    id="video"
+    src="New%20Project%20%5BC3E1D98%5D.mp4"
+    autoplay
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+  ></video>
 
   <script>
     const video = document.getElementById("video");
     let launched = false;
+
+    function updateVideoFit() {
+      if (!video.videoWidth || !video.videoHeight || !window.innerHeight) return;
+      const videoAspect = video.videoWidth / video.videoHeight;
+      const viewportAspect = window.innerWidth / window.innerHeight;
+      const aspectRatioDiff = Math.max(
+        videoAspect / viewportAspect,
+        viewportAspect / videoAspect
+      );
+      // Fill edge-to-edge when screen and video proportions are close; avoid heavy cropping otherwise.
+      video.style.objectFit = aspectRatioDiff <= 1.45 ? "cover" : "contain";
+    }
 
     async function launchSpotify() {
       if (launched) return;
@@ -78,11 +117,14 @@
     }
 
     async function enterFullscreen() {
-      if (document.fullscreenElement) return;
+      if (document.fullscreenElement || document.webkitFullscreenElement) return;
+      const root = document.documentElement;
+      const requestFs = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (!requestFs) return;
       try {
-        await document.documentElement.requestFullscreen();
+        await requestFs.call(root);
       } catch {
-        // Browsers require a user click for OS fullscreen.
+        // Browsers require a user click/tap for OS fullscreen.
       }
     }
 
@@ -96,7 +138,7 @@
         try {
           await video.play();
         } catch {
-          // Wait for user click if autoplay is completely disabled.
+          // Wait for user click/tap if autoplay is completely disabled.
         }
       }
     }
@@ -111,6 +153,9 @@
       }
     });
 
+    video.addEventListener("loadedmetadata", updateVideoFit);
+    window.addEventListener("resize", updateVideoFit);
+    window.addEventListener("orientationchange", updateVideoFit);
     video.addEventListener("ended", launchSpotify);
     window.addEventListener("DOMContentLoaded", startPlayback);
   </script>
