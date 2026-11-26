@@ -50,28 +50,6 @@
         object-fit: contain;
       }
     }
-
-    .continue-hint {
-      position: fixed;
-      left: 50%;
-      bottom: max(clamp(28px, 6vmin, 48px), env(safe-area-inset-bottom));
-      transform: translateX(-50%) translateY(6px);
-      z-index: 20;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: clamp(13px, 3.2vmin, 15px);
-      font-weight: 400;
-      letter-spacing: 0.03em;
-      color: rgba(255, 255, 255, 0.72);
-      white-space: nowrap;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.45s ease, transform 0.45s ease;
-    }
-
-    .continue-hint.visible {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
   </style>
 </head>
 <body>
@@ -84,12 +62,12 @@
     webkit-playsinline
     preload="auto"
   ></video>
-  <p id="continueHint" class="continue-hint" aria-live="polite">Tap anywhere to continue</p>
 
   <script>
     const video = document.getElementById("video");
-    const continueHint = document.getElementById("continueHint");
-    const ANDROID_SPOTIFY_INTENT =
+    const ANDROID_SPOTIFY_INTENT_DIRECT =
+      "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;end";
+    const ANDROID_SPOTIFY_INTENT_WITH_FALLBACK =
       "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;S.browser_fallback_url=https%3A%2F%2Fopen.spotify.com%2F;end";
     const isAndroid = /Android/i.test(navigator.userAgent);
     const isIOS =
@@ -97,7 +75,9 @@
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
     let videoCompleted = false;
-    let launched = false;
+    let autoAttempted = false;
+    let tapLaunched = false;
+    let leftForSpotify = false;
     let fullscreenBlocked = false;
 
     function updateVideoFit() {
@@ -112,10 +92,16 @@
       video.style.objectFit = aspectRatioDiff <= 1.45 ? "cover" : "contain";
     }
 
-    async function launchSpotify() {
-      if (launched) return;
-      launched = true;
-      continueHint.classList.remove("visible");
+    async function launchSpotify(fromUserTap) {
+      if (leftForSpotify) return;
+      if (!fromUserTap && autoAttempted) return;
+      if (fromUserTap && tapLaunched) return;
+
+      if (fromUserTap) {
+        tapLaunched = true;
+      } else {
+        autoAttempted = true;
+      }
 
       const isLocal =
         window.location.hostname === "localhost" ||
@@ -124,17 +110,25 @@
       if (isLocal) {
         try {
           const res = await fetch("/open-spotify", { method: "POST" });
-          if (res.ok) return;
+          if (res.ok) {
+            leftForSpotify = true;
+            return;
+          }
         } catch {
           // Fall back to URI launch if the local helper endpoint is unavailable.
         }
       }
 
       if (isAndroid) {
+        const hasGesture =
+          fromUserTap || Boolean(navigator.userActivation && navigator.userActivation.isActive);
+        const intentUrl = hasGesture
+          ? ANDROID_SPOTIFY_INTENT_WITH_FALLBACK
+          : ANDROID_SPOTIFY_INTENT_DIRECT;
         try {
-          window.location.href = ANDROID_SPOTIFY_INTENT;
+          window.location.href = intentUrl;
         } catch {
-          // Gracefully ignore if Android/browser security blocks external intent navigation.
+          // Gracefully ignore if browser security blocks automatic intent navigation.
         }
         return;
       }
@@ -142,11 +136,13 @@
       if (isIOS) {
         try {
           window.location.href = "spotify://";
-          setTimeout(() => {
-            if (document.visibilityState === "visible") {
-              window.location.replace("https://open.spotify.com/");
-            }
-          }, 1500);
+          if (fromUserTap) {
+            setTimeout(() => {
+              if (!leftForSpotify && document.visibilityState === "visible") {
+                window.location.replace("https://open.spotify.com/");
+              }
+            }, 1500);
+          }
         } catch {
           // Gracefully ignore if browser security blocks external navigation.
         }
@@ -173,7 +169,6 @@
       try {
         await requestFs.call(root);
       } catch {
-        // Avoid repeatedly requesting fullscreen if the browser or user blocks it.
         fullscreenBlocked = true;
       }
     }
@@ -188,9 +183,15 @@
       }
     }
 
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden" && (autoAttempted || tapLaunched)) {
+        leftForSpotify = true;
+      }
+    });
+
     document.addEventListener("click", async () => {
       if (videoCompleted) {
-        launchSpotify();
+        launchSpotify(true);
         return;
       }
 
@@ -209,8 +210,7 @@
 
     video.addEventListener("ended", () => {
       videoCompleted = true;
-      continueHint.classList.add("visible");
-      document.body.style.cursor = "pointer";
+      launchSpotify(false);
     });
 
     video.addEventListener("loadedmetadata", updateVideoFit);
