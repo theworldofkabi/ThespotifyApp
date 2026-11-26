@@ -91,6 +91,7 @@
   <script>
     const video = document.getElementById("video");
     let launched = false;
+    let fullscreenBlocked = false;
 
     function updateVideoFit() {
       if (!video.videoWidth || !video.videoHeight || !window.innerHeight) return;
@@ -121,7 +122,11 @@
         }
       }
 
-      window.location.href = "spotify:";
+      try {
+        window.location.href = "spotify:";
+      } catch {
+        // Ignore if external protocol navigation is blocked.
+      }
 
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       if (isMobile) {
@@ -134,29 +139,30 @@
     }
 
     async function enterFullscreen() {
-      if (document.fullscreenElement || document.webkitFullscreenElement) return;
+      if (fullscreenBlocked || document.fullscreenElement || document.webkitFullscreenElement) {
+        return;
+      }
       const root = document.documentElement;
       const requestFs = root.requestFullscreen || root.webkitRequestFullscreen;
-      if (!requestFs) return;
+      if (!requestFs) {
+        fullscreenBlocked = true;
+        return;
+      }
       try {
         await requestFs.call(root);
       } catch {
-        // Browsers require a user click/tap for OS fullscreen.
+        // Avoid repeatedly requesting fullscreen if the browser or user blocks it.
+        fullscreenBlocked = true;
       }
     }
 
     async function startPlayback() {
-      enterFullscreen();
+      // Always start muted on launch to avoid browser audio-autoplay permission prompts.
+      video.muted = true;
       try {
-        video.muted = false;
         await video.play();
       } catch {
-        video.muted = true;
-        try {
-          await video.play();
-        } catch {
-          // Wait for user click/tap if autoplay is completely disabled.
-        }
+        // Wait for user click/tap if autoplay is disabled by browser settings.
       }
     }
 
