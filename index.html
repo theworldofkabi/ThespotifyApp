@@ -65,9 +65,7 @@
 
   <script>
     const video = document.getElementById("video");
-    const ANDROID_SPOTIFY_INTENT_DIRECT =
-      "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;end";
-    const ANDROID_SPOTIFY_INTENT_WITH_FALLBACK =
+    const ANDROID_SPOTIFY_INTENT =
       "intent://open.spotify.com/#Intent;scheme=https;package=com.spotify.music;action=android.intent.action.VIEW;S.browser_fallback_url=https%3A%2F%2Fopen.spotify.com%2F;end";
     const isAndroid = /Android/i.test(navigator.userAgent);
     const isIOS =
@@ -75,10 +73,7 @@
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
     let videoCompleted = false;
-    let autoAttempted = false;
-    let tapLaunched = false;
-    let leftForSpotify = false;
-    let dialogShownOnAuto = false;
+    let launched = false;
     let fullscreenBlocked = false;
 
     function updateVideoFit() {
@@ -93,17 +88,9 @@
       video.style.objectFit = aspectRatioDiff <= 1.45 ? "cover" : "contain";
     }
 
-    async function launchSpotify(fromUserTap) {
-      if (leftForSpotify) return;
-      if (!fromUserTap && autoAttempted) return;
-      if (fromUserTap && (tapLaunched || dialogShownOnAuto)) return;
-
-      if (fromUserTap) {
-        tapLaunched = true;
-        autoAttempted = true;
-      } else {
-        autoAttempted = true;
-      }
+    async function launchSpotify() {
+      if (launched) return;
+      launched = true;
 
       const isLocal =
         window.location.hostname === "localhost" ||
@@ -112,25 +99,17 @@
       if (isLocal) {
         try {
           const res = await fetch("/open-spotify", { method: "POST" });
-          if (res.ok) {
-            leftForSpotify = true;
-            return;
-          }
+          if (res.ok) return;
         } catch {
           // Fall back to URI launch if the local helper endpoint is unavailable.
         }
       }
 
       if (isAndroid) {
-        const hasGesture =
-          fromUserTap || Boolean(navigator.userActivation && navigator.userActivation.isActive);
-        const intentUrl = hasGesture
-          ? ANDROID_SPOTIFY_INTENT_WITH_FALLBACK
-          : ANDROID_SPOTIFY_INTENT_DIRECT;
         try {
-          window.location.href = intentUrl;
+          window.location.href = ANDROID_SPOTIFY_INTENT;
         } catch {
-          // Gracefully ignore if browser security blocks automatic intent navigation.
+          // Gracefully ignore if Android/browser security blocks external intent navigation.
         }
         return;
       }
@@ -138,13 +117,11 @@
       if (isIOS) {
         try {
           window.location.href = "spotify://";
-          if (fromUserTap) {
-            setTimeout(() => {
-              if (!leftForSpotify && document.visibilityState === "visible") {
-                window.location.replace("https://open.spotify.com/");
-              }
-            }, 1500);
-          }
+          setTimeout(() => {
+            if (document.visibilityState === "visible") {
+              window.location.replace("https://open.spotify.com/");
+            }
+          }, 1500);
         } catch {
           // Gracefully ignore if browser security blocks external navigation.
         }
@@ -171,6 +148,7 @@
       try {
         await requestFs.call(root);
       } catch {
+        // Avoid repeatedly requesting fullscreen if the browser or user blocks it.
         fullscreenBlocked = true;
       }
     }
@@ -185,21 +163,9 @@
       }
     }
 
-    window.addEventListener("blur", () => {
-      if (autoAttempted && !tapLaunched) {
-        dialogShownOnAuto = true;
-      }
-    });
-
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden" && (autoAttempted || tapLaunched)) {
-        leftForSpotify = true;
-      }
-    });
-
     document.addEventListener("click", async () => {
       if (videoCompleted) {
-        launchSpotify(true);
+        launchSpotify();
         return;
       }
 
@@ -218,7 +184,7 @@
 
     video.addEventListener("ended", () => {
       videoCompleted = true;
-      launchSpotify(false);
+      document.body.style.cursor = "pointer";
     });
 
     video.addEventListener("loadedmetadata", updateVideoFit);
