@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#000000" />
+  <title>Playing</title>
+  <link rel="icon" type="image/svg+xml" href="spotify-logo.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="spotify-icon-192.png" />
+  <link rel="apple-touch-icon" href="spotify-icon-192.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      padding: clamp(12px, 2.2vw, 22px) clamp(16px, 3vw, 28px);
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+      pointer-events: none;
+    }
+
+    .navbar-logo {
+      display: block;
+      width: clamp(28px, 3.2vw, 40px);
+      height: clamp(28px, 3.2vw, 40px);
+      object-fit: contain;
+    }
+
+    video {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      background: #000;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar" aria-label="Spotify branding">
+    <img class="navbar-logo" src="spotify-logo.svg" alt="Spotify" />
+  </nav>
+  <video id="video" src="New%20Project%20%5BC3E1D98%5D.mp4" autoplay muted playsinline preload="auto"></video>
+
+  <script>
+    const video = document.getElementById("video");
+    let launched = false;
+
+    async function launchSpotify() {
+      if (launched) return;
+      launched = true;
+      try {
+        const res = await fetch("/open-spotify", { method: "POST" });
+        if (res.ok) return;
+      } catch {
+        // Static hosts (such as GitHub Pages) fall back to the spotify: URI scheme.
+      }
+      window.location.href = "spotify:";
+    }
+
+    async function enterFullscreen() {
+      if (document.fullscreenElement) return;
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch {
+        // Browsers require a user click for OS fullscreen.
+      }
+    }
+
+    async function startPlayback() {
+      enterFullscreen();
+      try {
+        video.muted = false;
+        await video.play();
+      } catch {
+        video.muted = true;
+        try {
+          await video.play();
+        } catch {
+          // Wait for user click if autoplay is completely disabled.
+        }
+      }
+    }
+
+    document.addEventListener("click", async () => {
+      enterFullscreen();
+      video.muted = false;
+      if (video.paused) {
+        try {
+          await video.play();
+        } catch {}
+      }
+    });
+
+    video.addEventListener("ended", launchSpotify);
+    window.addEventListener("DOMContentLoaded", startPlayback);
+  </script>
+</body>
+</html>
