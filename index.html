@@ -71,6 +71,7 @@
     const isIOS =
       /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const isMobile = isAndroid || isIOS;
 
     let videoCompleted = false;
     let launched = false;
@@ -191,7 +192,9 @@
     document.addEventListener("click", async () => {
       if (leftForSpotify) return;
       if (videoCompleted) {
-        launchSpotify();
+        if (isMobile) {
+          launchSpotify();
+        }
         return;
       }
 
@@ -210,7 +213,11 @@
 
     video.addEventListener("ended", () => {
       videoCompleted = true;
-      document.body.style.cursor = "pointer";
+      if (isMobile) {
+        document.body.style.cursor = "pointer";
+        return;
+      }
+      launchSpotify();
     });
 
     video.addEventListener("loadedmetadata", updateVideoFit);
